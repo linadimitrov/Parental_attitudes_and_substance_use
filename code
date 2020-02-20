@@ -1,0 +1,118 @@
+
+Code: 
+
+proc import out=project 
+datafile="/home/linavd0/BS852/BUALC3.xlsx" 
+DBMS=xlsx replace; 
+getnames=yes; 
+run; 
+ 
+*#Question 1, description of the study sample; 
+proc sort data=project; 
+by parentatt; 
+run; 
+ 
+proc means data=project; 
+var age_survey; 
+by parentatt; 
+run; 
+  
+proc freq data=project; 
+tables sex*parentatt/norow nocum; 
+tables raceeth*parentatt/norow nocum; 
+tables ACEcat*parentatt/norow nocum; 
+tables parentEd*parentatt/norow nocum; 
+run; 
+ 
+*#2, crude analysis; 
+proc freq data=project; 
+tables riskydrink*parentatt/norow nocum; 
+run; 
+ 
+ 
+proc logistic data=project; 
+class parentatt (ref="0")/param=ref; 
+model riskydrink (event="1")=parentatt; 
+run; 
+ 
+*#2, part 2, adjusted analysis; 
+proc logistic data=project; 
+class parentatt (ref="0")/param=ref; 
+class sex/param=ref; 
+class raceeth/param=ref; 
+class ACEcat(ref="1")/param=ref; 
+class parentED/param=ref; 
+model riskydrink (event="1")=parentatt sex age_survey raceeth ACEcat parented; 
+run; 
+ 
+*#2, part 4, testing for EMM by parental education; 
+proc logistic data=project; 
+class parentatt (ref="0")/param=ref; 
+class sex/param=ref; 
+class raceeth/param=ref; 
+class ACEcat (ref="1")/param=ref; 
+class parentED/param=ref; 
+model riskydrink (event="1")=parentatt sex age_survey raceeth ACEcat parented 
+parentatt*parented; 
+run; 
+ 
+*#3, creating timetoAUD; 
+data projecttime; 
+set project; 
+if AUD=1 then timetoAUD=age_AUD-age_alc_onset; 
+else if AUD=0 then timetoAUD=age_survey-age_alc_onset; 
+run; 
+*checking; 
+proc means data=projecttime; 
+where AUD=1; 
+var timetoAUD; 
+run; 
+ 
+*#3, part 2, providing survival curves for unadjusted analysis; 
+proc lifetest data=projecttime method=km plots=s; 
+time timetoAUD*AUD(0); 
+strata parentatt; 
+title "Kaplan-Meier Survival Curves for AUD in Relation to Parental Attitudes"; 
+run; 
+ 
+*#3, part 3, unadjusted analysis giving crude HR; 
+proc phreg data=projecttime; 
+class parentatt (ref="0")/param=ref; 
+model timetoAUD*AUD(0)=parentatt/rl; 
+run; 
+ 
+*#3, part 4, adjusted analysis; 
+proc phreg data=projecttime; 
+class parentatt (ref="0")/param=ref; 
+class sex/param=ref; 
+class raceeth/param=ref; 
+class ACEcat (ref="1")/param=ref; 
+class parentED/param=ref; 
+model timetoAUD*AUD(0)=parentatt sex raceeth ACEcat parented/rl; 
+run; 
+ 
+*#4 check PH assumption in parental attitude with log minus log survival plot; 
+proc lifetest notable plot=(s,lls); 
+time timetoAUD*AUD(0); 
+strata parentatt; 
+run; 
+ 
+*#4, check PH assumption in covariates using zph test; 
+proc phreg data=projecttime zph; 
+class parentatt (ref="0")/param=ref; 
+class sex/param=ref; 
+class raceeth/param=ref; 
+class ACEcat (ref="1")/param=ref; 
+class parentED/param=ref; 
+model timetoAUD*AUD(0)=sex raceeth ACEcat parented/rl; 
+run; 
+ 
+*#4, performing stratified analysis to account for pH assumption violation in sex and ACEcat; 
+*doublecheck ACEcat; 
+proc phreg data=projecttime; 
+class parentatt (ref="0")/param=ref; 
+class raceeth/param=ref; 
+class parentED/param=ref; 
+model timetoAUD*AUD(0)=parentatt raceeth parented/rl; 
+strata sex ACEcat; 
+run; 
